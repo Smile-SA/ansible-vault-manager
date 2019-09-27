@@ -14,7 +14,7 @@ import fnmatch
 from hashlib import md5
 from builtins import input
 import uuid
-from keyring_plugins import BaseKeyringPlugin
+from . import BaseKeyringPlugin
 
 CONFIG_SEPARATOR = ':'
 
