@@ -29,3 +29,29 @@ TODO :
 * Make native plugin Hashi Vault
 * Make native plugin S3
 * Make native plugin sshfs
+
+Install from smile :
+
+Global install :
+
+pip install ansible-vault-manager -i https://pypi.org/simple --extra-index-url https://nexus.vitry.intranet/repository/pypi-internal/simple/ --trusted-host nexus.vitry.intranet
+
+Pipenv install :
+
+Pipfile
+```
+[[source]]
+url = "https://pypi.org/simple"
+verify_ssl = true
+name = "pypi"
+
+[[source]]
+url = "https://nexus.vitry.intranet/repository/pypi-internal/simple/"
+verify_ssl = false
+name = "internal"
+
+[dev-packages]
+
+[packages]
+ansible-vault-manager = "*"
+```

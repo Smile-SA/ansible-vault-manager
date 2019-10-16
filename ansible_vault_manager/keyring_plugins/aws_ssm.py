@@ -88,140 +88,6 @@ class KeyringPlugin(BaseKeyringPlugin):
         account, region, ssm_key, asked_version = self.parse_vault_id(vault_id)
         return get_ssm_parameter(account, region, ssm_key, asked_version)
 
-    def change_password(self, vault_id, vault_path):
-        account, region, ssm_key, asked_version = self.parse_vault_id(vault_id)
-
-        if vault_path == None:
-            eprint('vault-path is mandatory to change password\n')
-            parser.print_help(sys.stderr)
-            sys.exit(2)
-
-        text = '''
-        Be very carefull ! Change passwords of vault files could causes deploying/self-provisioning
-        issues if Git is not aligned with AWS.
-        Use a strong password to avoid bruteforces attacks.
-
-        This action will do :
-        * ansible-vault rekey <vault file> with new password
-        * Push password on AWS Parameter Store to a new version
-        * Write version number in local `vault_vars/_metadata.yml`
-
-        Then you have to :
-        * Commit all changed files in `vault_vars/`
-        * Ensure `vault_vars/_metadata.yml` is always attached to vault files with same version
-        This version is about Parameter Store history and avoid issues in env for exemple if you change
-        password now and a self-provisioning start at the same time in production branch (where you not
-        pushed new vaults) for exemple
-
-        If you are not ready... CTRL-c !
-
-        '''
-        print(text)
-        try:
-            files = recursive_glob(vault_path)
-            vault_files = []
-            print('Files bellow will be affected :')
-            for file in files:
-                if (os.stat(file).st_size > 0 and not os.path.islink(file) and os.path.basename(file) != '_metadata.yml'):
-                    vault_files.append(file)
-                    print(file)
-
-            print('')
-            if (sys.stdin == ""):
-                password = getpass.getpass('New password: ')
-                cpassword = getpass.getpass('Confirm password: ')
-            else:
-                password = sys.stdin
-                input("Press Enter to continue...")
-        except KeyboardInterrupt:
-            print('')
-            sys.exit(0)
-        if cpassword != password:
-            eprint('Passwords missmatch')
-            sys.exit(2)
-
-        with open(vault_path + "/_metadata.yml", 'r') as stream:
-            vault_metadata = yaml.load(stream)
-            stream.close()
-
-        for id in vault_metadata['vault_ids']:
-            account_tmp, region_tmp, ssm_key_tmp, asked_version_tmp = self.parse_vault_id(id['id'])
-            if (account_tmp == account and region_tmp == region and ssm_key_tmp == ssm_key):
-                asked_version = asked_version_tmp
-
-        password_ssm = get_ssm_parameter(account, region, ssm_key, asked_version)
-
-        old_vault_api = VaultLib(_make_secrets(password_ssm))
-        vault_api = VaultLib(_make_secrets(password))
-        for file in vault_files:
-            try:
-                if not vault_api.is_encrypted_file(file):
-                    print('Skip non vault file ' + file)
-                    continue
-                #rekey
-                with open(file, 'r+') as stream:
-                    old_encrypted = stream.read()
-                    stream.seek(0)
-                    vars = old_vault_api.decrypt(old_encrypted)
-                    encrypted = vault_api.encrypt(vars)
-                    stream.write(encrypted)
-                    stream.close()
-
-            except ansible.errors.AnsibleError as e:
-                eprint('ERROR with file ' + file)
-                eprint(e)
-                sys.exit(2)
-
-        response = ssm.put_parameter(
-            Name=ssm_key,
-            Overwrite=True,
-            Type='SecureString',
-            Value=password
-        )
-        new_version = str(response['Version'])
-        print('New version ' + new_version + ' pushed on SSM')
-
-        # Write new version in vault metadata
-        for i, id in enumerate(vault_metadata['vault_ids']):
-            account_tmp, region_tmp, ssm_key_tmp, asked_version_tmp = self.parse_vault_id(id['id'])
-            if (account_tmp == account and region_tmp == region and ssm_key_tmp == ssm_key):
-                vault_metadata['vault_ids'][i]['id'] = current_env + ':' + ssm_key + ':' + new_version
-
-        with open(vault_path + "/_metadata.yml", 'w') as stream:
-            yaml.dump(vault_metadata, stream)
-            stream.close()
-
-    def encrypt(self, vault_id, vault_path):
-        account, region, ssm_key, asked_version = self.parse_vault_id(vault_id)
-        if vault_path == None:
-            eprint('vault-path is mandatory to encrypt dir content\n')
-            parser.print_help(sys.stderr)
-            sys.exit(2)
-
-        ssm = get_ssm_client(account, region)
-        response = ssm.get_parameter(
-            Name=ssm_key,
-            WithDecryption=True
-        )
-
-        vault_api = VaultLib(_make_secrets(response['Parameter']['Value']))
-        files = recursive_glob(vault_path)
-        non_vault_files = []
-        print('Files bellow will be affected :')
-        for file in files:
-            if os.stat(file).st_size > 0 and not os.path.islink(file) and os.path.basename(file) != '_metadata.yml':
-                if not vault_api.is_encrypted_file(file):
-                    non_vault_files.append(file)
-                    print(file)
-
-        for file in non_vault_files:
-            with open(file, 'r+') as stream:
-                vars = stream.read()
-                stream.seek(0)
-                encrypted = vault_api.encrypt(vars)
-                stream.write(encrypted)
-                stream.close()
-
     def set_password(self, id, password):
         account, region, ssm_key, asked_version = self.parse_vault_id(id)
 
@@ -239,6 +105,8 @@ class KeyringPlugin(BaseKeyringPlugin):
         aws_account = input('AWS Account profile: ')
         aws_region = input('AWS Region: ')
         aws_scope = input('Secret base path (ex. /ansible/dev/): ')
+        if (not aws_scope.endswith('/')):
+            aws_scope = aws_scope + '/'
         self.id = CONFIG_SEPARATOR.join([aws_account, aws_region, aws_scope + str(uuid.uuid4())])
         return self.id
 
