@@ -50,7 +50,7 @@ def get_metadata(path):
 
     with open(metadata_file, 'r') as stream:
         try:
-            vault_metadata = yaml.load(stream)
+            vault_metadata = yaml.load(stream, Loader=yaml.FullLoader)
             stream.close()
         except yaml.YAMLError as exc:
             eprint(exc)
