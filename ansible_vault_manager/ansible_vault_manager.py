@@ -17,7 +17,7 @@ PLUGIN_SEPARATOR = '%'
 CLIENT_SEPARATOR = '@'
 
 METADATA_FILE = '_metadata.yml'
-METADATA_PLUGIN_KEY = 'client'
+METADATA_PLUGIN_KEY = 'plugin'
 METADATA_ID_KEY = 'id'
 METADATA_VAULT_FILES = 'files'
 
@@ -50,7 +50,10 @@ def get_metadata(path):
 
     with open(metadata_file, 'r') as stream:
         try:
-            vault_metadata = yaml.load(stream, Loader=yaml.FullLoader)
+            if 'FullLoader' in yaml.__dict__:
+                vault_metadata = yaml.load(stream, Loader=yaml.FullLoader)
+            else:
+                vault_metadata = yaml.load(stream)
             stream.close()
         except yaml.YAMLError as exc:
             eprint(exc)
@@ -134,33 +137,74 @@ def which(pgm):
         if os.path.exists(p) and os.access(p,os.X_OK):
             return p
 
-parser = argparse.ArgumentParser(
-    description='Script to manage and fetch ansible-vault secrets',
-    formatter_class=argparse.ArgumentDefaultsHelpFormatter
-)
-parser.add_argument('--action', default='fetch', choices=['fetch','rekey','encrypt','encrypt_string','get-usable-ids','create'], help='Action to do.', required=False)
-parser.add_argument('--vault-id', help='ID of key to fetch. Format: [plugin]%' + PLUGIN_SEPARATOR + '[id at plugin format].', required=False)
-parser.add_argument('--vault-path', metavar='PATH', help='Diretory path where vault files are presents.', required=False)
-parser.add_argument('--verbose', '-v', action='store_true', default=False, help='Verbose mode for outputs')
-args = parser.parse_args()
+def set_default_subcommand():
+    command_args = sys.argv[1:]
+    known_subcommands = ['get-usable-ids','fetch','create']
+    sub_command_defined = False
+    for subcommand in known_subcommands:
+        if subcommand in command_args:
+            sub_command_defined = True
+            break
+    if not sub_command_defined and '-h' not in command_args and '--help' not in command_args:
+        command_args = ['fetch'] + command_args
+    return command_args
+
+def parse_commandline():
+    parser = argparse.ArgumentParser(
+        description='Script to manage and fetch ansible-vault secrets',
+        formatter_class=argparse.ArgumentDefaultsHelpFormatter
+    )
+    subparsers = parser.add_subparsers(help='Desired action, default fetch', dest='action', metavar='action')
+
+    parser_usable = subparsers.add_parser(
+        'get-usable-ids',
+        description='Generate vault_id string from all usable configs in metadata',
+        help='Generate vault_id string from all usable configs in metadata'
+    )
+    parser_usable.add_argument(
+        '--vault-path',
+        metavar='PATH',
+        help='Diretory path where vault files are presents.',
+        required=True
+    )
+
+    parser_fetch = subparsers.add_parser(
+        'fetch',
+        description='Fetch a password from remote keyring manager',
+        help='Fetch a password from remote keyring manager'
+    )
+    parser_fetch.add_argument(
+        '--vault-id',
+        help='ID of key to fetch. Format: [plugin]%' + PLUGIN_SEPARATOR + '[id at plugin format].',
+        required=True
+    )
+
+    parser_create = subparsers.add_parser(
+        'create',
+        description='Fetch a password from remote keyring manager',
+        help='Fetch a password from remote keyring manager'
+    )
+    parser_create.add_argument(
+        '--vault-path',
+        metavar='PATH',
+        help='Diretory path where vault files are presents.',
+        required=True
+    )
+
+    parser.add_argument('--verbose', '-v', action='store_true', default=False, help='Verbose mode for outputs')
+
+    args = parser.parse_args(set_default_subcommand())
+    return args
+
+args = parse_commandline()
 
 def main():
-    if args.action == 'fetch':
-        if args.vault_id == None:
-            eprint('vault-id is mandatory for fetch action\n')
-            parser.print_help(sys.stderr)
-            sys.exit(2)
-    
+    if args.action == 'fetch':  
         vault_id = args.vault_id.split(PLUGIN_SEPARATOR, -1)
         password = fetch_password(vault_id[0], vault_id[1])
         print(password)
     
     elif args.action == 'get-usable-ids':
-        if args.vault_path == None:
-            eprint('vault-path is mandatory to check usable ids\n')
-            parser.print_help(sys.stderr)
-            sys.exit(2)
-    
         vault_metadata = get_metadata(args.vault_path)
     
         usable_ids = []
@@ -182,11 +226,6 @@ def main():
         print(','.join(usable_ids))
     
     elif args.action == 'create':
-        if args.vault_path == None:
-            eprint('vault-path is mandatory to encrypt dir content\n')
-            parser.print_help(sys.stderr)
-            sys.exit(2)
-    
         try:
             print('')
             new_file = input('File to create: ')
@@ -242,18 +281,18 @@ def main():
 
         text = '''
         Be very carefull ! Change passwords of vault files could causes deploying/self-provisioning
-        issues if Git is not aligned with AWS.
+        issues if Git is not aligned with your keystore.
         Use a strong password to avoid bruteforces attacks.
 
         This action will do :
         * ansible-vault rekey <vault file> with new password
-        * Push password on AWS Parameter Store to a new version
-        * Write version number in local `vault_vars/_metadata.yml`
+        * Push password on keystore to a new version
+        * Write new version number in metadata file
 
         Then you have to :
         * Commit all changed files in `vault_vars/`
         * Ensure `vault_vars/_metadata.yml` is always attached to vault files with same version
-        This version is about Parameter Store history and avoid issues in env for exemple if you change
+        This version is about keystore history and avoid issues in env for exemple if you change
         password now and a self-provisioning start at the same time in production branch (where you not
         pushed new vaults) for exemple
 
@@ -262,6 +301,7 @@ def main():
         '''
         print(text)
         try:
+            # TODO by default not rekey all files ! Only one given in parameter
             files = recursive_glob(args.vault_path)
             vault_files = []
             print('Files bellow will be affected :')

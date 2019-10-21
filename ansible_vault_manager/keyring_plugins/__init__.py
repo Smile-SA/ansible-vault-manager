@@ -15,3 +15,12 @@ class BaseKeyringPlugin:
 
     def append_id_version(self, new_version):
         return self.id
+
+    def parse_vault_id(self, vault_id):
+        pass
+
+    def fetch(self, vault_id):
+        pass
+
+    def set_password(self, id, password):
+        pass
