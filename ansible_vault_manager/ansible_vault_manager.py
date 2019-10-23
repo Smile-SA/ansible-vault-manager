@@ -290,7 +290,8 @@ def main():
             else:
                 password = sys.stdin.read()
 
-            if password.strip() == '':
+            password = password.strip()
+            if password == '':
                 print('Your password is empty !')
                 sys.exit(2)
         except KeyboardInterrupt:
