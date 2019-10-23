@@ -41,7 +41,7 @@ Create a new vaulted file with generated password :
 
 ::
 
-    pwgen | python ansible_vault_manager/ansible_vault_manager.py create monfichier   \
+    pwgen | ansible-vault-manager-client create monfichier   \
         --vault-path vault_vars/  \
         --plugin aws_ssm   \
         --plugin-param region=eu-west-1   \
