@@ -8,7 +8,7 @@ except IOError:
 
 setup(
     name="ansible-vault-manager",
-    version="0.2.0",
+    version="0.2.1",
     description="Python tool to manage vault-ids",
     license="MIT",
     author="Guillaume GILL",
