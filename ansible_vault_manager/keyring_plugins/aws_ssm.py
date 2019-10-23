@@ -101,10 +101,23 @@ class KeyringPlugin(BaseKeyringPlugin):
         new_version = str(response['Version'])
         return new_version
 
-    def generate_id(self):
-        aws_account = input('AWS Account profile: ')
-        aws_region = input('AWS Region: ')
-        aws_scope = input('Secret base path (ex. /ansible/dev/): ')
+    def generate_id(self, plugin_vars=None):
+        params = {}
+        if plugin_vars != None:
+            params = self.parse_plugin_vars(plugin_vars)
+
+        if not 'profile' in params:
+            aws_account = input('AWS Account profile: ')
+        else:
+            aws_account = params['profile']
+        if not 'region' in params:
+            aws_region = input('AWS Region: ')
+        else:
+            aws_region = params['region']
+        if not 'path' in params:
+            aws_scope = input('Secret base path (ex. /ansible/dev/): ')
+        else:
+            aws_scope = params['path']
         if (not aws_scope.endswith('/')):
             aws_scope = aws_scope + '/'
         self.id = CONFIG_SEPARATOR.join([aws_account, aws_region, aws_scope + str(uuid.uuid4())])

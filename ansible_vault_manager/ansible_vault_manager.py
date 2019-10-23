@@ -43,8 +43,14 @@ def recursive_glob(rootdir='.', pattern='*'):
 
 	return matches
 
-def get_metadata(path):
-    metadata_file = path + "/" + METADATA_FILE
+def get_metadata(path, full_path=False, base_path=None):
+    if not full_path:
+        metadata_file = path + "/" + METADATA_FILE
+    else:
+        if path.startswith('/'):
+            metadata_file = path
+        else:
+            metadata_file = base_path + "/" + path
     if not os.path.exists(metadata_file):
         return {'vault_ids': []}
 
@@ -58,6 +64,12 @@ def get_metadata(path):
         except yaml.YAMLError as exc:
             eprint(exc)
             sys.exit(2)
+
+    if 'include' in vault_metadata:
+        for subfile in vault_metadata['include']:
+            metadata = get_metadata(subfile, True, os.path.dirname(metadata_file))
+            if 'vault_ids' in metadata:
+                vault_metadata['vault_ids'] = vault_metadata['vault_ids'] + metadata['vault_ids']
 
     return vault_metadata
 
@@ -149,11 +161,7 @@ def set_default_subcommand():
         command_args = ['fetch'] + command_args
     return command_args
 
-def parse_commandline():
-    parser = argparse.ArgumentParser(
-        description='Script to manage and fetch ansible-vault secrets',
-        formatter_class=argparse.ArgumentDefaultsHelpFormatter
-    )
+def parse_commandline(parser):
     subparsers = parser.add_subparsers(help='Desired action, default fetch', dest='action', metavar='action')
 
     parser_usable = subparsers.add_parser(
@@ -190,13 +198,41 @@ def parse_commandline():
         help='Diretory path where vault files are presents.',
         required=True
     )
+    parser_create.add_argument(
+        '--plugin',
+        help='Plugin name to use to store new password.',
+        required=False
+    )
+    parser_create.add_argument(
+        '--stdin-pwd',
+        dest='stdin_pass',
+        action='store_true',
+        help='Password will be implicitly read from stdin.',
+        required=False
+    )
+    parser_create.add_argument(
+        '--plugin-param',
+        dest='plugin_vars',
+        action='append',
+        help='Could be repeated, key=value param for plugin.',
+        required=False
+    )
+    parser_create.add_argument(
+        'file',
+        metavar='FILE_PATH',
+        help='File path to create.'
+    )
 
     parser.add_argument('--verbose', '-v', action='store_true', default=False, help='Verbose mode for outputs')
 
     args = parser.parse_args(set_default_subcommand())
     return args
 
-args = parse_commandline()
+parser = argparse.ArgumentParser(
+    description='Script to manage and fetch ansible-vault secrets',
+    formatter_class=argparse.ArgumentDefaultsHelpFormatter
+)
+args = parse_commandline(parser)
 
 def main():
     if args.action == 'fetch':  
@@ -228,24 +264,38 @@ def main():
     elif args.action == 'create':
         try:
             print('')
-            new_file = input('File to create: ')
+            new_file = args.file
+            if new_file == None:
+                new_file = input('File to create: ')
             if os.path.exists(args.vault_path + '/' + new_file):
                 eprint('This file already exists')
                 sys.exit(2)
-            plugin_name = input('Keyring plugin name to use [' + ', '.join(list_plugins()) + ']: ')
+
+            plugin_name = args.plugin
+            if plugin_name == None:
+                plugin_name = input('Keyring plugin name to use [' + ', '.join(list_plugins()) + ']: ')
             plugin = get_plugin_instance(plugin_name)
-            id = plugin.generate_id()
+            id = plugin.generate_id(args.plugin_vars)
+
             print('New ID to use: ' + id)
             print('')
-            password = getpass.getpass('New password: ')
-            cpassword = getpass.getpass('Confirm password: ')
+            stdin_pass = args.stdin_pass
+            if not stdin_pass and sys.stdin.isatty():
+                password = getpass.getpass('New password: ')
+                cpassword = getpass.getpass('Confirm password: ')
+
+                if cpassword != password:
+                    eprint('Passwords missmatch')
+                    sys.exit(2)
+            else:
+                password = sys.stdin.read()
+
+            if password.strip() == '':
+                print('Your password is empty !')
+                sys.exit(2)
         except KeyboardInterrupt:
             print('')
             sys.exit(0)
-    
-        if cpassword != password:
-            eprint('Passwords missmatch')
-            sys.exit(2)
     
         try:
             new_version = plugin.set_password(id, password)
