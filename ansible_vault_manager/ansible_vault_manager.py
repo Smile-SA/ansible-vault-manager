@@ -1,16 +1,18 @@
 #!/usr/bin/env python
 
 from __future__ import print_function, absolute_import
-import yaml
-import inspect
 import os.path
-import argparse
 import sys
 import getpass
+import argparse
+import inspect
 import fnmatch
+from tempfile import gettempdir
 from hashlib import md5
 from importlib import import_module
 from builtins import input
+
+import yaml
 
 PLUGIN_SEPARATOR = '%'
 CLIENT_SEPARATOR = '@'
@@ -51,12 +53,12 @@ def recursive_glob(rootdir='.', pattern='*'):
 
 def get_metadata(path, full_path=False, base_path=None):
     if not full_path:
-        metadata_file = path + "/" + METADATA_FILE
+        metadata_file = os.path.join(path, METADATA_FILE)
     else:
-        if path.startswith('/'):
+        if os.path.isabs(path):
             metadata_file = path
         else:
-            metadata_file = base_path + "/" + path
+            metadata_file = os.path.join(base_path, path)
     if not os.path.exists(metadata_file):
         return {'vault_ids': []}
 
@@ -66,7 +68,6 @@ def get_metadata(path, full_path=False, base_path=None):
                 vault_metadata = yaml.load(stream, Loader=yaml.FullLoader)
             else:
                 vault_metadata = yaml.load(stream)
-            stream.close()
         except yaml.YAMLError as exc:
             eprint(exc)
             sys.exit(2)
@@ -81,54 +82,50 @@ def get_metadata(path, full_path=False, base_path=None):
 
 
 def write_metadata(metadata, path):
-    with open(path + "/" + METADATA_FILE, 'w+') as stream:
+    with open(os.path.join(path, METADATA_FILE), 'w+') as stream:
         yaml.dump(metadata, stream)
-        stream.close()
 
 
 def get_cached_password(vault_id):
     return False
-    if (os.path.isfile('/tmp/' + md5(vault_id.encode()).hexdigest())):
-        with open('/tmp/' + md5(vault_id.encode()).hexdigest(), 'r') as cached:
+    if os.path.isfile(os.path.join(gettempdir(), md5(vault_id.encode()).hexdigest())):
+        with open(os.path.join(gettempdir(), md5(vault_id.encode()).hexdigest()), 'r') as cached:
             password = cached.read()
-            cached.close()
             return password
 
     return False
 
 
 def set_cached_password(vault_id, password):
-    with open('/tmp/' + md5(vault_id.encode()).hexdigest(), 'w+') as cached:
+    with open(os.path.join(gettempdir(), md5(vault_id.encode()).hexdigest()), 'w+') as cached:
         password = cached.write(password)
-        cached.close()
 
 
-def fetch_password(vault_client, vault_id):
+def fetch_password(vault_plugin, vault_id):
     if get_cached_password(vault_id):
         return (0, get_cached_password(vault_id), "")
     else:
-        plugin = get_plugin_instance(vault_client)
-        current_password = plugin.fetch(vault_id)
-        return current_password
+        plugin = get_plugin_instance(vault_plugin)
+        return plugin.fetch(vault_id)
 
 
 def get_plugin_instance(plugin_name):
-    try:
-        if (__name__ == '__main__'):
-            module_path = 'keyring_plugins.' + plugin_name
-            package = None
-        else:
-            module_path = '.keyring_plugins.' + plugin_name
-            package = ('.').join(__name__.split('.')[:-1])
-        if (args.verbose):
-            print('Import module : ' + module_path)
+    if __name__ == '__main__':
+        module_path = 'keyring_plugins.' + plugin_name
+        package = None
+    else:
+        module_path = '.keyring_plugins.' + plugin_name
+        package = ('.').join(__name__.split('.')[:-1])
+    if args.verbose:
+        print('Import module : ' + module_path)
 
+    try:
         module = import_module(module_path, package)
         KeyringPlugin = module.KeyringPlugin
     except ImportError as e:
-        if (args.verbose):
+        if args.verbose:
             print(e)
-        eprint('Smile keyring manager client plugin ' + plugin_name + ' not found')
+        eprint('Keyring manager client plugin ' + plugin_name + ' not found')
 
     return KeyringPlugin()
 
@@ -268,13 +265,13 @@ def main():
         for id in vault_metadata['vault_ids']:
             try:
                 password = fetch_password(id[METADATA_PLUGIN_KEY], id[METADATA_ID_KEY])
-                if (password):
+                if password:
                     usable_ids.append(id[METADATA_PLUGIN_KEY] + PLUGIN_SEPARATOR + id[METADATA_ID_KEY] + CLIENT_SEPARATOR + client_script)
             except Exception as e:
-                if (args.verbose):
+                if args.verbose:
                     eprint(e)
 
-        if (len(usable_ids) == 0):
+        if not usable_ids:
             sys.exit(0)
 
         print(','.join(usable_ids))
@@ -285,7 +282,7 @@ def main():
             new_file = args.file
             if new_file is None:
                 new_file = input('File to create: ')
-            if os.path.exists(args.vault_path + '/' + new_file):
+            if os.path.exists(os.path.join(args.vault_path, new_file)):
                 eprint('This file already exists')
                 sys.exit(2)
 
@@ -328,10 +325,9 @@ def main():
 
             VaultLib = get_vault_lib()
             vault_api = VaultLib(_make_secrets(password))
-            with open(args.vault_path + '/' + new_file, 'w') as stream:
+            with open(os.path.join(args.vault_path, new_file), 'w') as stream:
                 encrypted = vault_api.encrypt('---')
                 stream.write(encrypted)
-                stream.close()
         except Exception as e:
             eprint(e)
             sys.exit(2)

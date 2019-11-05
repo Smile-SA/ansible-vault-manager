@@ -1,7 +1,7 @@
 from __future__ import (absolute_import, division, print_function)
-__all__ = ["BaseKeyringPlugin"]
-
 import uuid
+
+__all__ = ["BaseKeyringPlugin"]
 
 
 class BaseKeyringPlugin:

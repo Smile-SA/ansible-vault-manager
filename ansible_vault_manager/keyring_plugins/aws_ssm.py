@@ -2,32 +2,33 @@
 
 from __future__ import print_function
 import os.path
+from hashlib import md5
+from builtins import input
+from tempfile import gettempdir
+import uuid
+
 try:
     import boto3
 except ImportError as e:
     raise RuntimeError('You need to install boto3 python lib to use this plugin')
-from hashlib import md5
-from builtins import input
-import uuid
+
 from . import BaseKeyringPlugin
 
 CONFIG_SEPARATOR = ':'
 
 
 def get_cached_password(vault_id):
-    if (os.path.isfile('/tmp/' + md5(vault_id.encode()).hexdigest())):
-        with open('/tmp/' + md5(vault_id.encode()).hexdigest(), 'r') as cached:
+    if (os.path.isfile(os.path.join(gettempdir(), md5(vault_id.encode()).hexdigest()))):
+        with open(os.path.join(gettempdir(), md5(vault_id.encode()).hexdigest()), 'r') as cached:
             password = cached.read()
-            cached.close()
             return password
 
     return False
 
 
 def set_cached_password(vault_id, password):
-    with open('/tmp/' + md5(vault_id.encode()).hexdigest(), 'w+') as cached:
+    with open(os.path.join(gettempdir(), md5(vault_id.encode()).hexdigest()), 'w+') as cached:
         password = cached.write(password)
-        cached.close()
 
 
 def get_ssm_client(account, region):
