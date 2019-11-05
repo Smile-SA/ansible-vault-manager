@@ -1,22 +1,18 @@
 #!/usr/bin/env python
 
 from __future__ import print_function
-import yaml
 import os.path
-import argparse
 try:
-  import boto3
+    import boto3
 except ImportError as e:
-  raise RuntimeError('You need to install boto3 python lib to use this plugin')
-import sys
-import getpass
-import fnmatch
+    raise RuntimeError('You need to install boto3 python lib to use this plugin')
 from hashlib import md5
 from builtins import input
 import uuid
 from . import BaseKeyringPlugin
 
 CONFIG_SEPARATOR = ':'
+
 
 def get_cached_password(vault_id):
     if (os.path.isfile('/tmp/' + md5(vault_id.encode()).hexdigest())):
@@ -27,10 +23,12 @@ def get_cached_password(vault_id):
 
     return False
 
+
 def set_cached_password(vault_id, password):
     with open('/tmp/' + md5(vault_id.encode()).hexdigest(), 'w+') as cached:
         password = cached.write(password)
         cached.close()
+
 
 def get_ssm_client(account, region):
     boto3.setup_default_session(
@@ -40,6 +38,7 @@ def get_ssm_client(account, region):
 
     return boto3.client('ssm')
 
+
 def get_ssm_parameter(account, region, ssm_key, asked_version=None):
     id = account + region + ssm_key + str(asked_version)
     if get_cached_password(id):
@@ -47,7 +46,7 @@ def get_ssm_parameter(account, region, ssm_key, asked_version=None):
     else:
         ssm = get_ssm_client(account, region)
 
-        if asked_version == None:
+        if asked_version is None:
             response = ssm.get_parameter(
                 Name=ssm_key,
                 WithDecryption=True
@@ -64,23 +63,24 @@ def get_ssm_parameter(account, region, ssm_key, asked_version=None):
             for key_data in filtered_iterator:
                 value = key_data['Value']
 
-        if (value == None):
+        if (value is None):
             raise Exception('Parameter not found on SSM')
 
         set_cached_password(id, value)
 
     return value
 
+
 class KeyringPlugin(BaseKeyringPlugin):
 
     def parse_vault_id(self, vault_id):
         vault_id = vault_id.split(CONFIG_SEPARATOR)
-        account=vault_id[0]
-        region=vault_id[1]
-        ssm_key=vault_id[2]
-        asked_version=None
+        account = vault_id[0]
+        region = vault_id[1]
+        ssm_key = vault_id[2]
+        asked_version = None
         if len(vault_id) > 3:
-            asked_version=vault_id[3]
+            asked_version = vault_id[3]
 
         return (account, region, ssm_key, asked_version)
 
@@ -103,18 +103,18 @@ class KeyringPlugin(BaseKeyringPlugin):
 
     def generate_id(self, plugin_vars=None):
         params = {}
-        if plugin_vars != None:
+        if plugin_vars is not None:
             params = self.parse_plugin_vars(plugin_vars)
 
-        if not 'profile' in params:
+        if 'profile' not in params:
             aws_account = input('AWS Account profile: ')
         else:
             aws_account = params['profile']
-        if not 'region' in params:
+        if 'region' not in params:
             aws_region = input('AWS Region: ')
         else:
             aws_region = params['region']
-        if not 'path' in params:
+        if 'path' not in params:
             aws_scope = input('Secret base path (ex. /ansible/dev/): ')
         else:
             aws_scope = params['path']
@@ -124,4 +124,4 @@ class KeyringPlugin(BaseKeyringPlugin):
         return self.id
 
     def append_id_version(self, new_version):
-        return self.id + ('' if new_version == None else CONFIG_SEPARATOR + str(new_version))
+        return self.id + ('' if new_version is None else CONFIG_SEPARATOR + str(new_version))

@@ -3,6 +3,7 @@ __all__ = ["BaseKeyringPlugin"]
 
 import uuid
 
+
 class BaseKeyringPlugin:
     verbose = False
 
@@ -21,7 +22,7 @@ class BaseKeyringPlugin:
         for couple in vars:
             (key, value) = couple.split('=', 1)
             params[key] = value
-            
+
         return params
 
     def parse_vault_id(self, vault_id):

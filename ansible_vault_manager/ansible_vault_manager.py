@@ -8,7 +8,6 @@ import argparse
 import sys
 import getpass
 import fnmatch
-import subprocess
 from hashlib import md5
 from importlib import import_module
 from builtins import input
@@ -24,24 +23,31 @@ METADATA_VAULT_FILES = 'files'
 '''
 Print message on stderr instead of stdout
 '''
+
+
 def eprint(*args, **kwargs):
     print(*args, file=sys.stderr, **kwargs)
 
+
 def list_plugins():
-    return ['aws_ssm','bitwarden']
+    return ['aws_ssm', 'bitwarden']
+
 
 def recursive_glob(rootdir='.', pattern='*'):
-	"""Search recursively for files matching a specified pattern.
+    '''
+    Search recursively for files matching a specified pattern.
 
-	Adapted from http://stackoverflow.com/questions/2186525/use-a-glob-to-find-files-recursively-in-python
-	"""
+    Adapted from
+    http://stackoverflow.com/questions/2186525/use-a-glob-to-find-files-recursively-in-python
+    '''
 
-	matches = []
-	for root, dirnames, filenames in os.walk(rootdir):
-	  for filename in fnmatch.filter(filenames, pattern):
-		  matches.append(os.path.join(root, filename))
+    matches = []
+    for root, dirnames, filenames in os.walk(rootdir):
+        for filename in fnmatch.filter(filenames, pattern):
+            matches.append(os.path.join(root, filename))
 
-	return matches
+    return matches
+
 
 def get_metadata(path, full_path=False, base_path=None):
     if not full_path:
@@ -73,10 +79,12 @@ def get_metadata(path, full_path=False, base_path=None):
 
     return vault_metadata
 
+
 def write_metadata(metadata, path):
     with open(path + "/" + METADATA_FILE, 'w+') as stream:
         yaml.dump(metadata, stream)
         stream.close()
+
 
 def get_cached_password(vault_id):
     return False
@@ -88,10 +96,12 @@ def get_cached_password(vault_id):
 
     return False
 
+
 def set_cached_password(vault_id, password):
     with open('/tmp/' + md5(vault_id.encode()).hexdigest(), 'w+') as cached:
         password = cached.write(password)
         cached.close()
+
 
 def fetch_password(vault_client, vault_id):
     if get_cached_password(vault_id):
@@ -100,6 +110,7 @@ def fetch_password(vault_client, vault_id):
         plugin = get_plugin_instance(vault_client)
         current_password = plugin.fetch(vault_id)
         return current_password
+
 
 def get_plugin_instance(plugin_name):
     try:
@@ -121,6 +132,7 @@ def get_plugin_instance(plugin_name):
 
     return KeyringPlugin()
 
+
 def get_vault_lib():
     try:
         import ansible
@@ -135,6 +147,7 @@ def get_vault_lib():
 
     return VaultLib
 
+
 def _make_secrets(secret):
     secret = secret.encode('utf-8')
 
@@ -142,16 +155,18 @@ def _make_secrets(secret):
     from ansible.parsing.vault import VaultSecret
     return [(DEFAULT_VAULT_ID_MATCH, VaultSecret(secret))]
 
+
 def which(pgm):
-    path=os.getenv('PATH')
+    path = os.getenv('PATH')
     for p in path.split(os.path.pathsep):
-        p=os.path.join(p,pgm)
-        if os.path.exists(p) and os.access(p,os.X_OK):
+        p = os.path.join(p, pgm)
+        if os.path.exists(p) and os.access(p, os.X_OK):
             return p
+
 
 def set_default_subcommand():
     command_args = sys.argv[1:]
-    known_subcommands = ['get-usable-ids','fetch','create']
+    known_subcommands = ['get-usable-ids', 'fetch', 'create']
     sub_command_defined = False
     for subcommand in known_subcommands:
         if subcommand in command_args:
@@ -160,6 +175,7 @@ def set_default_subcommand():
     if not sub_command_defined and '-h' not in command_args and '--help' not in command_args:
         command_args = ['fetch'] + command_args
     return command_args
+
 
 def parse_commandline(parser):
     subparsers = parser.add_subparsers(help='Desired action, default fetch', dest='action', metavar='action')
@@ -228,21 +244,23 @@ def parse_commandline(parser):
     args = parser.parse_args(set_default_subcommand())
     return args
 
+
 parser = argparse.ArgumentParser(
     description='Script to manage and fetch ansible-vault secrets',
     formatter_class=argparse.ArgumentDefaultsHelpFormatter
 )
 args = parse_commandline(parser)
 
+
 def main():
-    if args.action == 'fetch':  
+    if args.action == 'fetch':
         vault_id = args.vault_id.split(PLUGIN_SEPARATOR, -1)
         password = fetch_password(vault_id[0], vault_id[1])
         print(password)
-    
+
     elif args.action == 'get-usable-ids':
         vault_metadata = get_metadata(args.vault_path)
-    
+
         usable_ids = []
         # client_script is current script call path
         client_script = inspect.stack()[0][1]
@@ -255,24 +273,24 @@ def main():
             except Exception as e:
                 if (args.verbose):
                     eprint(e)
-    
+
         if (len(usable_ids) == 0):
             sys.exit(0)
-    
+
         print(','.join(usable_ids))
-    
+
     elif args.action == 'create':
         try:
             print('')
             new_file = args.file
-            if new_file == None:
+            if new_file is None:
                 new_file = input('File to create: ')
             if os.path.exists(args.vault_path + '/' + new_file):
                 eprint('This file already exists')
                 sys.exit(2)
 
             plugin_name = args.plugin
-            if plugin_name == None:
+            if plugin_name is None:
                 plugin_name = input('Keyring plugin name to use [' + ', '.join(list_plugins()) + ']: ')
             plugin = get_plugin_instance(plugin_name)
             id = plugin.generate_id(args.plugin_vars)
@@ -297,17 +315,17 @@ def main():
         except KeyboardInterrupt:
             print('')
             sys.exit(0)
-    
+
         try:
             new_version = plugin.set_password(id, password)
             id = plugin.append_id_version(new_version)
-        
+
             vault_metadata = get_metadata(args.vault_path)
             vault_metadata['vault_ids'].append(
                 {METADATA_ID_KEY: id, METADATA_PLUGIN_KEY: plugin_name, METADATA_VAULT_FILES: [new_file]}
             )
             write_metadata(vault_metadata, args.vault_path)
-        
+
             VaultLib = get_vault_lib()
             vault_api = VaultLib(_make_secrets(password))
             with open(args.vault_path + '/' + new_file, 'w') as stream:
@@ -320,7 +338,7 @@ def main():
             if (args.verbose):
                 import traceback
                 traceback.print_exc()
-    
+
     elif args.action == 'rekey':
         print("Action not yet ready !!!")
         sys.exit(2)
