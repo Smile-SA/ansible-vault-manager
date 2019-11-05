@@ -325,103 +325,10 @@ def main():
         print("Action not yet ready !!!")
         sys.exit(2)
 
-        if args.vault_path == None:
-            eprint('vault-path is mandatory to change password\n')
-            parser.print_help(sys.stderr)
-            sys.exit(2)
-
-        text = '''
-        Be very carefull ! Change passwords of vault files could causes deploying/self-provisioning
-        issues if Git is not aligned with your keystore.
-        Use a strong password to avoid bruteforces attacks.
-
-        This action will do :
-        * ansible-vault rekey <vault file> with new password
-        * Push password on keystore to a new version
-        * Write new version number in metadata file
-
-        Then you have to :
-        * Commit all changed files in `vault_vars/`
-        * Ensure `vault_vars/_metadata.yml` is always attached to vault files with same version
-        This version is about keystore history and avoid issues in env for exemple if you change
-        password now and a self-provisioning start at the same time in production branch (where you not
-        pushed new vaults) for exemple
-
-        If you are not ready... CTRL-c !
-
-        '''
-        print(text)
-        try:
-            # TODO by default not rekey all files ! Only one given in parameter
-            files = recursive_glob(args.vault_path)
-            vault_files = []
-            print('Files bellow will be affected :')
-            for file in files:
-                if (os.stat(file).st_size > 0 and not os.path.islink(file) and os.path.basename(file) != '_metadata.yml'):
-                    vault_files.append(file)
-                    print(file)
-
-            print('')
-            if (sys.stdin == ""):
-                password = getpass.getpass('New password: ')
-                cpassword = getpass.getpass('Confirm password: ')
-            else:
-                password = sys.stdin
-                input("Press Enter to continue...")
-        except KeyboardInterrupt:
-            print('')
-            sys.exit(0)
-        if cpassword != password:
-            eprint('Passwords missmatch')
-            sys.exit(2)
-
-        old_vault_api = VaultLib(_make_secrets(old_password))
-        vault_api = VaultLib(_make_secrets(password))
-        for file in vault_files:
-            try:
-                if not vault_api.is_encrypted_file(file):
-                    print('Skip non vault file ' + file)
-                    continue
-                #rekey
-                with open(file, 'r+') as stream:
-                    old_encrypted = stream.read()
-                    stream.seek(0)
-                    vars = old_vault_api.decrypt(old_encrypted)
-                    encrypted = vault_api.encrypt(vars)
-                    stream.write(encrypted)
-                    stream.close()
-
-            except ansible.errors.AnsibleError as e:
-                eprint('ERROR with file ' + file)
-                eprint(e)
-                sys.exit(2)
-    
     elif args.action == 'encrypt':
         print("Action not yet ready !!!")
         sys.exit(2)
 
-        if args.vault_path == None:
-            eprint('vault-path is mandatory to encrypt dir content\n')
-            parser.print_help(sys.stderr)
-            sys.exit(2)
-
-        vault_api = VaultLib(_make_secrets(password))
-        files = recursive_glob(args.vault_path)
-        non_vault_files = []
-        print('Files bellow will be affected :')
-        for file in files:
-            if os.stat(file).st_size > 0 and not os.path.islink(file) and os.path.basename(file) != '_metadata.yml':
-                if not vault_api.is_encrypted_file(file):
-                    non_vault_files.append(file)
-                    print(file)
-
-        for file in non_vault_files:
-            with open(file, 'r+') as stream:
-                vars = stream.read()
-                stream.seek(0)
-                encrypted = vault_api.encrypt(vars)
-                stream.write(encrypted)
-                stream.close()
 
 if __name__ == '__main__':
     main()
