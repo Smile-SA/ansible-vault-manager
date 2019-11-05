@@ -59,15 +59,19 @@ declare your identities list :
 
     # Check usable vault ids and add them to ansible env var
     USABLE_IDS=$(ansible-vault-manager-client get-usable-ids --vault-path "provisioning/inventory/vault_vars/")
-    echo $USABLE_IDS
     if [ "$USABLE_IDS" != "" ]; then
         export ANSIBLE_VAULT_IDENTITY_LIST="$USABLE_IDS"
     fi
 
+BUGS :
+======
+
+* Action create not clean new file or remote vault if an error occurs
 
 TODO :
 ======
 
+* Implement actions rekey and encrypt
 * Make extensible via custom deported plugins added via a "plugin path"
 * Make native plugin Hashi Vault
 * Make native plugin S3
