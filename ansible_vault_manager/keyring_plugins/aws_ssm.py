@@ -59,7 +59,9 @@ def get_ssm_parameter(account, region, ssm_key, asked_version=None):
                 Name=ssm_key,
                 WithDecryption=True
             )
-            filtered_iterator = page_iterator.search("Parameters[?Version==`" + asked_version + "`]")
+            filtered_iterator = page_iterator.search(
+                "Parameters[?Version==`" + asked_version + "`]"
+            )
             value = None
             for key_data in filtered_iterator:
                 value = key_data['Value']

@@ -11,6 +11,7 @@ from tempfile import gettempdir
 from hashlib import md5
 from importlib import import_module
 from builtins import input
+import glob
 
 import yaml
 
@@ -32,7 +33,8 @@ def eprint(*args, **kwargs):
 
 
 def list_plugins():
-    return ['aws_ssm', 'bitwarden']
+    modules = glob.glob(os.path.join(os.path.dirname(__file__), 'keyring_plugins', '*.py'))
+    return [os.path.basename(f)[:-3] for f in modules if os.path.isfile(f) and not f.endswith('__init__.py')]
 
 
 def recursive_glob(rootdir='.', pattern='*'):
@@ -101,35 +103,6 @@ def set_cached_password(vault_id, password):
         password = cached.write(password)
 
 
-def fetch_password(vault_plugin, vault_id):
-    if get_cached_password(vault_id):
-        return (0, get_cached_password(vault_id), "")
-    else:
-        plugin = get_plugin_instance(vault_plugin)
-        return plugin.fetch(vault_id)
-
-
-def get_plugin_instance(plugin_name):
-    if __name__ == '__main__':
-        module_path = 'keyring_plugins.' + plugin_name
-        package = None
-    else:
-        module_path = '.keyring_plugins.' + plugin_name
-        package = ('.').join(__name__.split('.')[:-1])
-    if args.verbose:
-        print('Import module : ' + module_path)
-
-    try:
-        module = import_module(module_path, package)
-        KeyringPlugin = module.KeyringPlugin
-    except ImportError as e:
-        if args.verbose:
-            print(e)
-        eprint('Keyring manager client plugin ' + plugin_name + ' not found')
-
-    return KeyringPlugin()
-
-
 def get_vault_lib():
     try:
         import ansible
@@ -174,8 +147,17 @@ def set_default_subcommand():
     return command_args
 
 
-def parse_commandline(parser):
-    subparsers = parser.add_subparsers(help='Desired action, default fetch', dest='action', metavar='action')
+def parse_commandline():
+    parser = argparse.ArgumentParser(
+        description='Script to manage and fetch ansible-vault secrets',
+        formatter_class=argparse.ArgumentDefaultsHelpFormatter
+    )
+
+    subparsers = parser.add_subparsers(
+        help='Desired action, default fetch',
+        dest='action',
+        metavar='action'
+    )
 
     parser_usable = subparsers.add_parser(
         'get-usable-ids',
@@ -236,27 +218,43 @@ def parse_commandline(parser):
         help='File path to create.'
     )
 
-    parser.add_argument('--verbose', '-v', action='store_true', default=False, help='Verbose mode for outputs')
+    parser.add_argument(
+        '--verbose',
+        '-v',
+        action='store_true',
+        default=False,
+        help='Verbose mode for outputs'
+    )
 
     args = parser.parse_args(set_default_subcommand())
-    return args
+    return parser, args
 
 
-parser = argparse.ArgumentParser(
-    description='Script to manage and fetch ansible-vault secrets',
-    formatter_class=argparse.ArgumentDefaultsHelpFormatter
-)
-args = parse_commandline(parser)
+class HelpException(Exception):
+    pass
 
 
-def main():
-    if args.action == 'fetch':
-        vault_id = args.vault_id.split(PLUGIN_SEPARATOR, -1)
-        password = fetch_password(vault_id[0], vault_id[1])
+class VaultManager:
+    def __init__(self, args):
+        self.args = args
+        if self.args.action == 'fetch':
+            self.fetch()
+        elif self.args.action == 'get-usable-ids':
+            self.get_usable_ids()
+        elif self.args.action == 'create':
+            self.create()
+        elif self.args.action == 'rekey':
+            self.not_ready()
+        elif self.args.action == 'encrypt':
+            self.not_ready()
+
+    def fetch(self):
+        vault_id = self.args.vault_id.split(PLUGIN_SEPARATOR, -1)
+        password = self.fetch_password(vault_id[0], vault_id[1])
         print(password)
 
-    elif args.action == 'get-usable-ids':
-        vault_metadata = get_metadata(args.vault_path)
+    def get_usable_ids(self):
+        vault_metadata = get_metadata(self.args.vault_path)
 
         usable_ids = []
         # client_script is current script call path
@@ -264,11 +262,17 @@ def main():
         client_script = which('ansible-vault-manager-client')
         for id in vault_metadata['vault_ids']:
             try:
-                password = fetch_password(id[METADATA_PLUGIN_KEY], id[METADATA_ID_KEY])
+                password = self.fetch_password(id[METADATA_PLUGIN_KEY], id[METADATA_ID_KEY])
                 if password:
-                    usable_ids.append(id[METADATA_PLUGIN_KEY] + PLUGIN_SEPARATOR + id[METADATA_ID_KEY] + CLIENT_SEPARATOR + client_script)
+                    usable_ids.append(
+                        id[METADATA_PLUGIN_KEY]
+                        + PLUGIN_SEPARATOR
+                        + id[METADATA_ID_KEY]
+                        + CLIENT_SEPARATOR
+                        + client_script
+                    )
             except Exception as e:
-                if args.verbose:
+                if self.args.verbose:
                     eprint(e)
 
         if not usable_ids:
@@ -276,25 +280,27 @@ def main():
 
         print(','.join(usable_ids))
 
-    elif args.action == 'create':
+    def create(self):
         try:
             print('')
-            new_file = args.file
+            new_file = self.args.file
             if new_file is None:
                 new_file = input('File to create: ')
-            if os.path.exists(os.path.join(args.vault_path, new_file)):
+            if os.path.exists(os.path.join(self.args.vault_path, new_file)):
                 eprint('This file already exists')
                 sys.exit(2)
 
-            plugin_name = args.plugin
+            plugin_name = self.args.plugin
             if plugin_name is None:
-                plugin_name = input('Keyring plugin name to use [' + ', '.join(list_plugins()) + ']: ')
-            plugin = get_plugin_instance(plugin_name)
-            id = plugin.generate_id(args.plugin_vars)
+                plugin_name = input(
+                    'Keyring plugin name to use [' + ', '.join(list_plugins()) + ']: '
+                )
+            plugin = self.get_plugin_instance(plugin_name)
+            id = plugin.generate_id(self.args.plugin_vars)
 
             print('New ID to use: ' + id)
             print('')
-            stdin_pass = args.stdin_pass
+            stdin_pass = self.args.stdin_pass
             if not stdin_pass and sys.stdin.isatty():
                 password = getpass.getpass('New password: ')
                 cpassword = getpass.getpass('Confirm password: ')
@@ -317,31 +323,67 @@ def main():
             new_version = plugin.set_password(id, password)
             id = plugin.append_id_version(new_version)
 
-            vault_metadata = get_metadata(args.vault_path)
+            vault_metadata = get_metadata(self.args.vault_path)
             vault_metadata['vault_ids'].append(
-                {METADATA_ID_KEY: id, METADATA_PLUGIN_KEY: plugin_name, METADATA_VAULT_FILES: [new_file]}
+                {
+                    METADATA_ID_KEY: id,
+                    METADATA_PLUGIN_KEY: plugin_name,
+                    METADATA_VAULT_FILES: [new_file]
+                }
             )
-            write_metadata(vault_metadata, args.vault_path)
+            write_metadata(vault_metadata, self.args.vault_path)
 
             VaultLib = get_vault_lib()
             vault_api = VaultLib(_make_secrets(password))
-            with open(os.path.join(args.vault_path, new_file), 'w') as stream:
+            with open(os.path.join(self.args.vault_path, new_file), 'w') as stream:
                 encrypted = vault_api.encrypt('---')
                 stream.write(encrypted)
         except Exception as e:
             eprint(e)
             sys.exit(2)
-            if (args.verbose):
+            if (self.args.verbose):
                 import traceback
                 traceback.print_exc()
 
-    elif args.action == 'rekey':
+    def not_ready(self):
         print("Action not yet ready !!!")
         sys.exit(2)
 
-    elif args.action == 'encrypt':
-        print("Action not yet ready !!!")
-        sys.exit(2)
+    def fetch_password(self, vault_plugin, vault_id):
+        if get_cached_password(vault_id):
+            return (0, get_cached_password(vault_id), "")
+        else:
+            plugin = self.get_plugin_instance(vault_plugin)
+            return plugin.fetch(vault_id)
+
+    def get_plugin_instance(self, plugin_name):
+        if __name__ == '__main__':
+            module_path = 'keyring_plugins.' + plugin_name
+            package = None
+        else:
+            module_path = '.keyring_plugins.' + plugin_name
+            package = ('.').join(__name__.split('.')[:-1])
+        if self.args.verbose:
+            print('Import module : ' + module_path)
+
+        try:
+            module = import_module(module_path, package)
+            KeyringPlugin = module.KeyringPlugin
+        except ImportError as e:
+            if self.args.verbose:
+                print(e)
+            eprint('Keyring manager client plugin ' + plugin_name + ' not found')
+
+        return KeyringPlugin()
+
+
+def main():
+    parser, args = parse_commandline()
+    try:
+        VaultManager(args)
+    except HelpException as e:
+        print(e.message)
+        parser.print_help()
 
 
 if __name__ == '__main__':
