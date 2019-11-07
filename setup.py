@@ -9,10 +9,10 @@ except IOError:
 setup(
     name="ansible-vault-manager",
     version="0.2.2",
-    description="Python tool to manage vault-ids",
-    license="MIT",
+    description="Python tool to manage Ansible vault-ids",
+    license="OSL",
     author="Guillaume GILL",
-    author_email='guillaume.gill@smile.fr',
+    author_email="guillaume.gill@smile.fr",
     packages=find_packages(),
     install_requires=[
        "future",
@@ -24,7 +24,7 @@ setup(
             'ansible-vault-manager-client=ansible_vault_manager.ansible_vault_manager:main',
         ],
     },
-    url='https://git.smile.fr/ansible/ansible-vault-manager',
+    url='https://github.com/Smile-SA/ansible-vault-manager',
     python_requires='>=2.7,!=3.0.*,!=3.1.*,!=3.2.*,!=3.3.*,!=3.4.*',
     classifiers=[
         "Programming Language :: Python",
