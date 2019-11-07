@@ -68,6 +68,20 @@ BUGS :
 
 * Action create not clean new file or remote vault if an error occurs
 
+Installation :
+====================
+
+Global install :
+----------------
+
+pip install ansible-vault-manager
+
+Pipenv install :
+----------------
+
+pipenv install ansible-vault-manager
+
+
 TODO :
 ======
 
@@ -127,35 +141,6 @@ Example :
 
     vault_vars/pp   <= This file is encrypted but you know it should contain vault_my_database_password
     vault_my_database_password: xxxxxxxxx
-
-Install from smile :
-====================
-
-Global install :
-----------------
-
-pip install ansible-vault-manager -i https://pypi.org/simple --extra-index-url https://nexus.vitry.intranet/repository/pypi-internal/simple/ --trusted-host nexus.vitry.intranet
-
-Pipenv install :
-----------------
-
-Pipfile
-::
-
-    [[source]]
-    url = "https://pypi.org/simple"
-    verify_ssl = true
-    name = "pypi"
-
-    [[source]]
-    url = "https://nexus.vitry.intranet/repository/pypi-internal/simple/"
-    verify_ssl = false
-    name = "internal"
-
-    [dev-packages]
-
-    [packages]
-    ansible-vault-manager = "*"
 
 
 Metadata file informations :
@@ -238,7 +223,6 @@ Multipass Git :
 
 Multipass is a derived version of https://www.passwordstore.org/ for multi-users.
 A set of scripts is available here : https://github.com/toringe/multi-pass
-And this plugin use a customized smile version : https://git.smile.fr/smile-outsourcing/multi-pass
 
 TODO
 
