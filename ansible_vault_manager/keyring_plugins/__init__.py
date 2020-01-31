@@ -4,6 +4,10 @@ import uuid
 __all__ = ["BaseKeyringPlugin"]
 
 
+class KeyringException(Exception):
+    pass
+
+
 class BaseKeyringPlugin:
     verbose = False
 
