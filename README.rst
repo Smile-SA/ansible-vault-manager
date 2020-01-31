@@ -210,6 +210,22 @@ All parameters are versionned, AWS keep each versions of parameters.
 Vault ID structure :
 `[account profile]:[AWS region]:[parameter path]:[version]`
 
+
+Local (or remote locally mounted) filesystem :
+----------------------------------------------
+
+This plugin provides a simple way to manage versionned password on
+a local file path. You can use for exemple an sftp / sshfs mount point.
+Be carefull, basepath must be common for every users of vault !
+
+* basepath: Directory where vault passwords are stored
+
+Vault ID structure :
+`[basepath]:[filename]:[version]`
+
+The file `[basepath]/[filename].[version]` contains vault password
+
+
 Bitwarden :
 -----------
 
