@@ -109,8 +109,9 @@ All files into, matching to hosts groups, will be included.
       connection: local
       tasks:
         - name: Include vaulted vars
-            include_vars: "{{ item }}"
-            with_fileglob: "{{ group_names | map('regex_replace', '^(.*)$', 'inventory/vault_vars/\\1') | list }}"
+          include_vars: "{{ item }}"
+          # prepend path to all groups, "all" group is not present in group_names, we force it
+          with_fileglob: "{{ (group_names + ['all']) | map('regex_replace', '^(.*)$', inventory_dir + '/vault_vars/\\1') | list }}"
       tags:
         - always
 
@@ -123,8 +124,8 @@ If you want, you could apply a similar process for "hosts_vars"
       connection: local
       tasks:
         - name: Include vaulted vars
-            include_vars: "{{ item }}"
-            with_fileglob: "inventory/hosts_vault_vars/{{ inventory_hostname }}"
+          include_vars: "{{ item }}"
+          with_fileglob: "{{ inventory_dir }}/hosts_vault_vars/{{ inventory_hostname }}"
       tags:
         - always
 
