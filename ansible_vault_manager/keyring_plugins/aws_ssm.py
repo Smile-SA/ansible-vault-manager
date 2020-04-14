@@ -6,6 +6,7 @@ from hashlib import md5
 from builtins import input
 from tempfile import gettempdir
 import uuid
+import getpass
 
 try:
     import boto3
@@ -100,6 +101,20 @@ class KeyringPlugin(BaseKeyringPlugin):
             Overwrite=True,
             Type='SecureString',
             Value=password
+        )
+        ssm.add_tags_to_resource(
+            ResourceType='Parameter',
+            ResourceId=ssm_key,
+            Tags=[
+               {
+                  "Key": "CreatedBy",
+                  "Value": "ansible-vault-manager"
+               },
+               {
+                  "Key":"CalledBy",
+                  "Value": getpass.getuser()
+               }
+            ]
         )
         new_version = str(response['Version'])
         return new_version
