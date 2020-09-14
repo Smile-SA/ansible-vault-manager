@@ -336,7 +336,7 @@ class VaultManager:
             VaultLib = get_vault_lib()
             vault_api = VaultLib(_make_secrets(password))
             with open(os.path.join(self.args.vault_path, new_file), 'w') as stream:
-                encrypted = vault_api.encrypt('---')
+                encrypted = str(vault_api.encrypt('---'), 'utf-8')
                 stream.write(encrypted)
         except Exception as e:
             eprint(e)
