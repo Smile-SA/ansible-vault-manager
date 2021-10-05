@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 
-from __future__ import print_function, absolute_import
+from __future__ import print_function, absolute_import, unicode_literals
 import os.path
 import sys
 import getpass
@@ -10,7 +10,7 @@ import fnmatch
 from tempfile import gettempdir
 from hashlib import md5
 from importlib import import_module
-from builtins import input
+from builtins import input, str
 import glob
 
 import yaml
@@ -336,7 +336,7 @@ class VaultManager:
             VaultLib = get_vault_lib()
             vault_api = VaultLib(_make_secrets(password))
             with open(os.path.join(self.args.vault_path, new_file), 'w') as stream:
-                encrypted = vault_api.encrypt('---')
+                encrypted = str(vault_api.encrypt('---'), 'utf-8')
                 stream.write(encrypted)
         except Exception as e:
             eprint(e)
